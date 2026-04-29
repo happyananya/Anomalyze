@@ -6,16 +6,11 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Optional, Tuple
 
-from confluent_kafka import Producer
+from kafka import KafkaProducer
 
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _delivery_report(err, msg) -> None:
-    if err is not None:
-        raise RuntimeError(f"Delivery failed: {err}")
 
 
 def iter_csv_records(path: str) -> Iterable[Tuple[Optional[str], Dict[str, Any]]]:
@@ -41,16 +36,18 @@ def iter_log_lines(path: str) -> Iterable[Tuple[None, Dict[str, Any]]]:
             yield None, {"raw": line}
 
 
-def build_producer(bootstrap: str, client_id: str) -> Producer:
-    return Producer(
-        {
-            "bootstrap.servers": bootstrap,
-            "client.id": client_id,
-            "enable.idempotence": True,
-            "acks": "all",
-            "linger.ms": 20,
-            "batch.num.messages": 10000,
-        }
+def build_producer(bootstrap: str, client_id: str) -> KafkaProducer:
+    # Pure-Python Kafka client (no librdkafka C headers needed on macOS).
+    return KafkaProducer(
+        bootstrap_servers=[bootstrap],
+        client_id=client_id,
+        acks="all",
+        linger_ms=20,
+        batch_size=32768,
+        buffer_memory=33554432,
+        enable_idempotence=True,
+        value_serializer=lambda v: v,
+        key_serializer=lambda v: v,
     )
 
 
@@ -94,17 +91,11 @@ def main() -> None:
             "source_file": os.path.basename(args.input),
             "payload": payload,
         }
-        prod.produce(
-            args.topic,
-            key=key.encode("utf-8") if key is not None else None,
-            value=json.dumps(envelope, ensure_ascii=False).encode("utf-8"),
-            on_delivery=_delivery_report,
-        )
-        prod.poll(0)
+        value_bytes = json.dumps(envelope, ensure_ascii=False).encode("utf-8")
+        key_bytes = key.encode("utf-8") if key is not None else None
+        prod.send(args.topic, key=key_bytes, value=value_bytes).get(timeout=30)
 
         sent += 1
-        if sent % 5000 == 0:
-            prod.flush(10)
 
         if args.max_messages and sent >= args.max_messages:
             break
@@ -112,7 +103,8 @@ def main() -> None:
         if sleep_s:
             time.sleep(sleep_s)
 
-    prod.flush(30)
+    prod.flush()
+    prod.close()
     print(f"Sent {sent} messages to topic '{args.topic}' on {args.bootstrap}")
 
 
