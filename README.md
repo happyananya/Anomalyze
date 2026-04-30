@@ -86,6 +86,26 @@ Parsed docs land in MongoDB at `anomalyze.parsed_logs`. Each document contains:
 | `block_id`   | `blk_-1608999687919862906`     | Links to `anomaly_label.csv`    |
 | `message`    | `Receiving block blk_...`      | Full log message                |
 
+### 6. Run the anomaly detector
+
+Runs two detection methods and saves results to `anomalyze.anomalies` in MongoDB.
+
+```bash
+python -m detector.anomaly_detector
+```
+
+**Method 1 — Isolation Forest (ML)**
+Trains on all 575k blocks from `Event_occurrence_matrix.csv` using E1–E29 event counts as features.
+Prints precision / recall / F1 against ground-truth labels.
+
+**Method 2 — Statistical threshold**
+Reads parsed logs from MongoDB, groups ERROR/WARN lines by minute, and flags any minute where the count exceeds mean + 2×std.
+
+Results land in `anomalyze.anomalies`:
+```bash
+docker exec -it anomalyze-mongo mongosh anomalyze --eval "db.anomalies.countDocuments()"
+```
+
 ## Project Status
 
 - [x] Kafka + Zookeeper (Docker)
@@ -94,5 +114,5 @@ Parsed docs land in MongoDB at `anomalyze.parsed_logs`. Each document contains:
 - [x] Spark master + worker (Docker)
 - [x] MongoDB (Docker)
 - [x] Spark consumer — parses logs → MongoDB
-- [ ] Anomaly detector — statistical thresholds + Isolation Forest
+- [x] Anomaly detector — Isolation Forest + statistical threshold
 - [ ] Dashboard — error rates, anomaly visualization
