@@ -48,3 +48,37 @@ services:
     environment:
       - KAFKA_CLUSTERS_0_NAME=anomalyze
       - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+
+  spark-master:
+    image: apache/spark:3.5.0
+    container_name: anomalyze-spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - "7077:7077"   # Spark master port (submit jobs here)
+      - "8081:8080"   # Spark Web UI (8080 taken by kafka-ui)
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+
+  spark-worker:
+    image: apache/spark:3.5.0
+    container_name: anomalyze-spark-worker
+    depends_on:
+      - spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+      - SPARK_WORKER_MEMORY=2g
+      - SPARK_WORKER_CORES=2
+
+  mongo:
+    image: mongo:7.0
+    container_name: anomalyze-mongo
+    ports:
+      - "27017:27017"   # Connect from host with: mongodb://localhost:27017
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=anomalyze
+
+volumes:
+  mongo-data:
