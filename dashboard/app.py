@@ -274,47 +274,178 @@ with tab_anom:
     if anom_df.empty:
         st.info("No anomalies for the selected filters. Run `python -m detector.anomaly_detector` first.")
     else:
-        col_a, col_b = st.columns(2)
+        if_df = anom_df[anom_df["method"] == "isolation_forest"].copy()
+        has_labels = "true_label" in if_df.columns and not if_df.empty
 
-        with col_a:
-            method_counts = anom_df["method"].value_counts().reset_index()
-            method_counts.columns = ["method", "count"]
-            fig_pie = px.pie(
-                method_counts,
-                names="method",
-                values="count",
-                title="Anomalies by detection method",
-                template="plotly_dark",
-                color_discrete_sequence=["#60a5fa", "#f87171"],
-                hole=0.45,
-            )
-            fig_pie.update_traces(textposition="outside", textinfo="percent+label")
-            st.plotly_chart(fig_pie, use_container_width=True)
+        if has_labels:
+            tp = int((if_df["true_label"] == "Fail").sum())
+            fp = int((if_df["true_label"] == "Success").sum())
+            total_detected = len(if_df)
+            precision = tp / total_detected if total_detected > 0 else 0.0
 
-        with col_b:
-            # Timeline of anomaly detections
-            if "detected_at" in anom_df.columns:
-                anom_df["detected_at_ts"] = pd.to_datetime(
-                    anom_df["detected_at"], errors="coerce", utc=True
+            has_full_metrics = False
+            try:
+                gt_df = pd.read_csv("data/HDFS_v1/preprocessed/anomaly_label.csv")
+                total_actual = int((gt_df["Label"] == "Anomaly").sum())
+                total_blocks = len(gt_df)
+                fn = total_actual - tp
+                tn = total_blocks - tp - fp - fn
+                recall = tp / total_actual if total_actual > 0 else 0.0
+                f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+                has_full_metrics = True
+            except Exception:
+                pass
+
+            st.subheader("Isolation Forest — Model Performance")
+
+            if has_full_metrics:
+                m1, m2, m3, m4, m5, m6 = st.columns(6)
+                with m1:
+                    st.metric("Detected", f"{total_detected:,}")
+                with m2:
+                    st.metric("True Positives", f"{tp:,}", help="Flagged AND actually anomalous (Fail)")
+                with m3:
+                    st.metric("False Positives", f"{fp:,}", help="Flagged but actually normal (Success)")
+                with m4:
+                    st.metric("False Negatives", f"{fn:,}", help="Actual anomalies the model missed")
+                with m5:
+                    st.metric("Precision", f"{precision:.1%}", help="Of all flagged blocks, how many were real anomalies?")
+                with m6:
+                    st.metric("Recall", f"{recall:.1%}", help=f"Of all actual anomalies, how many did we catch?  F1: {f1:.3f}")
+            else:
+                m1, m2, m3, m4 = st.columns(4)
+                with m1:
+                    st.metric("Detected", f"{total_detected:,}")
+                with m2:
+                    st.metric("True Positives", f"{tp:,}")
+                with m3:
+                    st.metric("False Positives", f"{fp:,}")
+                with m4:
+                    st.metric("Precision", f"{precision:.1%}")
+
+            st.divider()
+
+            col_a, col_b = st.columns(2)
+
+            with col_a:
+                lc = (
+                    if_df["true_label"]
+                    .map({"Fail": "True Positive", "Success": "False Positive"})
+                    .value_counts()
+                    .reset_index()
                 )
-                anom_time = (
-                    anom_df.groupby(["method"])
-                    .size()
-                    .reset_index(name="count")
-                )
-                fig_bar = px.bar(
-                    anom_time,
-                    x="method",
-                    y="count",
-                    title="Anomaly count by method",
+                lc.columns = ["result", "count"]
+                fig_tp_fp = px.pie(
+                    lc,
+                    names="result",
+                    values="count",
+                    title="Detection quality: True vs False Positives",
                     template="plotly_dark",
-                    color="method",
-                    color_discrete_sequence=["#60a5fa", "#f87171"],
-                    text="count",
+                    color="result",
+                    color_discrete_map={
+                        "True Positive": "#34d399",
+                        "False Positive": "#f87171",
+                    },
+                    hole=0.5,
                 )
-                fig_bar.update_traces(textposition="outside")
-                fig_bar.update_layout(showlegend=False)
-                st.plotly_chart(fig_bar, use_container_width=True)
+                fig_tp_fp.update_traces(textposition="outside", textinfo="percent+label")
+                st.plotly_chart(fig_tp_fp, use_container_width=True)
+
+            with col_b:
+                if has_full_metrics:
+                    cm_df = pd.DataFrame(
+                        [[tp, fn], [fp, tn]],
+                        index=["Predicted: Anomaly", "Predicted: Normal"],
+                        columns=["Actual: Anomaly", "Actual: Normal"],
+                    )
+                    fig_cm = px.imshow(
+                        cm_df,
+                        text_auto=",.0f",
+                        title="Confusion Matrix",
+                        template="plotly_dark",
+                        color_continuous_scale=[[0, "#1a1a2e"], [0.5, "#3b82f6"], [1, "#34d399"]],
+                        aspect="auto",
+                    )
+                    fig_cm.update_layout(
+                        height=350,
+                        coloraxis_showscale=False,
+                        xaxis_title="Ground Truth",
+                        yaxis_title="Model Prediction",
+                    )
+                    fig_cm.update_traces(textfont_size=16)
+                    st.plotly_chart(fig_cm, use_container_width=True)
+                else:
+                    fig_prec = go.Figure(go.Bar(
+                        x=["Precision"],
+                        y=[precision * 100],
+                        marker_color="#60a5fa",
+                        text=[f"{precision:.1%}"],
+                        textposition="outside",
+                    ))
+                    fig_prec.update_layout(
+                        title="Precision",
+                        yaxis=dict(range=[0, 110], title="Precision (%)"),
+                        template="plotly_dark",
+                        showlegend=False,
+                    )
+                    st.plotly_chart(fig_prec, use_container_width=True)
+
+            if "detected_at" in if_df.columns:
+                if_df["detected_at_ts"] = pd.to_datetime(if_df["detected_at"], errors="coerce", utc=True)
+                if_df["result"] = if_df["true_label"].map({"Fail": "True Positive", "Success": "False Positive"})
+                tl = if_df.dropna(subset=["detected_at_ts"]).copy()
+                if not tl.empty:
+                    tl["bucket"] = tl["detected_at_ts"].dt.floor("1h")
+                    tl_grp = tl.groupby(["bucket", "result"]).size().reset_index(name="count")
+                    fig_tl = px.bar(
+                        tl_grp,
+                        x="bucket",
+                        y="count",
+                        color="result",
+                        title="Detections over time — True Positive vs False Positive",
+                        labels={"bucket": "Time", "count": "Count", "result": ""},
+                        template="plotly_dark",
+                        color_discrete_map={
+                            "True Positive": "#34d399",
+                            "False Positive": "#f87171",
+                        },
+                        barmode="stack",
+                    )
+                    fig_tl.update_layout(hovermode="x unified", legend=dict(orientation="h", y=1.12))
+                    st.plotly_chart(fig_tl, use_container_width=True)
+
+        else:
+            col_a, col_b = st.columns(2)
+            with col_a:
+                method_counts = anom_df["method"].value_counts().reset_index()
+                method_counts.columns = ["method", "count"]
+                fig_pie = px.pie(
+                    method_counts,
+                    names="method",
+                    values="count",
+                    title="Anomalies by detection method",
+                    template="plotly_dark",
+                    color_discrete_sequence=["#60a5fa", "#f87171"],
+                    hole=0.45,
+                )
+                fig_pie.update_traces(textposition="outside", textinfo="percent+label")
+                st.plotly_chart(fig_pie, use_container_width=True)
+            with col_b:
+                if "detected_at" in anom_df.columns:
+                    anom_time = anom_df.groupby(["method"]).size().reset_index(name="count")
+                    fig_bar = px.bar(
+                        anom_time,
+                        x="method",
+                        y="count",
+                        title="Anomaly count by method",
+                        template="plotly_dark",
+                        color="method",
+                        color_discrete_sequence=["#60a5fa", "#f87171"],
+                        text="count",
+                    )
+                    fig_bar.update_traces(textposition="outside")
+                    fig_bar.update_layout(showlegend=False)
+                    st.plotly_chart(fig_bar, use_container_width=True)
 
         # Statistical spikes timeline
         stat_df = anom_df[anom_df["method"] == "statistical_threshold"].copy()
@@ -336,11 +467,19 @@ with tab_anom:
                 fig_spikes.update_layout(showlegend=False)
                 st.plotly_chart(fig_spikes, use_container_width=True)
 
-        # Anomaly table
+        # Anomaly records table
         st.subheader("Anomaly records")
-        display_cols = [c for c in ["method", "block_id", "true_label", "minute", "error_count", "detected_at"] if c in anom_df.columns]
+        display_anom = anom_df.copy()
+        if "true_label" in display_anom.columns:
+            display_anom["correct"] = display_anom["true_label"].map(
+                {"Fail": "✓ True Positive", "Success": "✗ False Positive"}
+            )
+        display_cols = [
+            c for c in ["method", "block_id", "true_label", "correct", "minute", "error_count", "detected_at"]
+            if c in display_anom.columns
+        ]
         st.dataframe(
-            anom_df[display_cols].reset_index(drop=True),
+            display_anom[display_cols].reset_index(drop=True),
             use_container_width=True,
             height=400,
         )
