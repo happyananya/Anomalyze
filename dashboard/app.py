@@ -180,7 +180,20 @@ st.header("Overview")
 total_logs = len(logs_df)
 error_logs = int((logs_df["level"] == "ERROR").sum()) if not logs_df.empty else 0
 total_anom = len(anom_df)
-if_anom = int((anom_df["method"] == "isolation_forest").sum()) if not anom_df.empty else 0
+ml_methods = ["kmeans_distance", "isolation_forest", "one_class_svm"]
+primary_ml_method = None
+for method_name in ml_methods:
+    if not anom_df.empty and "method" in anom_df.columns and method_name in anom_df["method"].values:
+        primary_ml_method = method_name
+        break
+if primary_ml_method is None and not anom_df.empty and "method" in anom_df.columns:
+    non_stat_methods = [m for m in anom_df["method"].dropna().unique().tolist() if m != "statistical_threshold"]
+    primary_ml_method = non_stat_methods[0] if non_stat_methods else "statistical_threshold"
+primary_ml_count = (
+    int((anom_df["method"] == primary_ml_method).sum())
+    if (not anom_df.empty and primary_ml_method is not None)
+    else 0
+)
 
 col1, col2, col3, col4 = st.columns(4)
 
@@ -204,12 +217,56 @@ with col3:
     )
 with col4:
     st.markdown(
-        f'<div class="metric-card green"><div class="metric-val">{if_anom:,}</div>'
-        '<div class="metric-lbl">Isolation Forest flags</div></div>',
+        f'<div class="metric-card green"><div class="metric-val">{primary_ml_count:,}</div>'
+        f'<div class="metric-lbl">{(primary_ml_method or "ML method")} flags</div></div>',
         unsafe_allow_html=True,
     )
 
 st.divider()
+
+if not logs_df.empty:
+    st.subheader("Data Snapshot")
+
+    ts_start = logs_df["ts"].min()
+    ts_end = logs_df["ts"].max()
+    unique_components = int(logs_df["component"].nunique()) if "component" in logs_df.columns else 0
+    unique_blocks = int(logs_df["block_id"].dropna().nunique()) if "block_id" in logs_df.columns else 0
+
+    s1, s2, s3 = st.columns(3)
+    with s1:
+        st.metric("Time window start", ts_start.strftime("%Y-%m-%d %H:%M:%S"))
+    with s2:
+        st.metric("Time window end", ts_end.strftime("%Y-%m-%d %H:%M:%S"))
+    with s3:
+        st.metric("Unique components", f"{unique_components:,}")
+
+    s4, s5 = st.columns(2)
+    with s4:
+        st.metric("Unique block IDs", f"{unique_blocks:,}")
+    with s5:
+        lvl = logs_df["level"].value_counts()
+        top_level = lvl.index[0] if not lvl.empty else "N/A"
+        st.metric("Dominant log level", top_level)
+
+    level_mix = logs_df["level"].value_counts().rename_axis("level").reset_index(name="count")
+    if not level_mix.empty:
+        fig_lvl = px.pie(
+            level_mix,
+            names="level",
+            values="count",
+            title="Log level distribution",
+            template="plotly_dark",
+            hole=0.45,
+            color="level",
+            color_discrete_map={
+                "ERROR": "#f87171",
+                "WARN": "#fbbf24",
+                "INFO": "#60a5fa",
+                "DEBUG": "#a78bfa",
+            },
+        )
+        fig_lvl.update_traces(textposition="outside", textinfo="percent+label")
+        st.plotly_chart(fig_lvl, use_container_width=True)
 
 
 # ── tab layout ────────────────────────────────────────────────────────────────

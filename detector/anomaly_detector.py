@@ -2,7 +2,7 @@
 Anomaly detector for Anomalyze.
 
 Two detection methods:
-  1. Isolation Forest (ML) — trained on Event_occurrence_matrix.csv (E1-E29 features).
+  1. K-Means distance (ML) — trained on Event_occurrence_matrix.csv (E1-E29 features).
      Labels: Success / Fail  (~2.9% anomaly rate).
   2. Statistical threshold — error-rate spike detection on parsed_logs in MongoDB.
 
@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 from pymongo import MongoClient
-from sklearn.ensemble import IsolationForest
+from sklearn.cluster import KMeans
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.preprocessing import StandardScaler
 
@@ -32,11 +32,12 @@ COL_ANOMALIES = "anomalies"
 
 FEATURE_COLS = [f"E{i}" for i in range(1, 30)]
 CONTAMINATION = 16838 / 575061  # real anomaly rate from the dataset
+KMEANS_K = 8
 
 
-# ── 1. Isolation Forest ───────────────────────────────────────────────────────
+# ── 1. K-Means distance ───────────────────────────────────────────────────────
 
-def run_isolation_forest() -> pd.DataFrame:
+def run_kmeans_detection() -> pd.DataFrame:
     print("Loading event matrix …")
     df = pd.read_csv(MATRIX_PATH)
 
@@ -47,23 +48,27 @@ def run_isolation_forest() -> pd.DataFrame:
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    print(f"Training Isolation Forest on {len(X):,} blocks …")
-    model = IsolationForest(
-        n_estimators=100,
-        contamination=CONTAMINATION,
-        random_state=42,
-        n_jobs=-1,
-    )
-    raw_preds = model.fit_predict(X_scaled)
-    # IsolationForest: -1 = anomaly, 1 = normal
-    y_pred = (raw_preds == -1).astype(int)
+    print(f"Training K-Means (k={KMEANS_K}) on {len(X):,} blocks …")
+    model = KMeans(n_clusters=KMEANS_K, random_state=42, n_init="auto")
+    cluster_ids = model.fit_predict(X_scaled)
 
-    print("\n── Isolation Forest Results ──")
+    centers = model.cluster_centers_
+    diffs = X_scaled - centers[cluster_ids]
+    distances = np.sqrt((diffs * diffs).sum(axis=1))
+
+    n_anom = max(1, int(round(CONTAMINATION * len(distances))))
+    if n_anom >= len(distances):
+        n_anom = len(distances) - 1
+
+    cutoff = np.partition(distances, -n_anom)[-n_anom]
+    y_pred = (distances >= cutoff).astype(int)
+
+    print("\n── K-Means Distance Results ──")
     print(classification_report(y_true, y_pred, target_names=["Normal", "Anomaly"]))
     print("Confusion matrix (rows=true, cols=pred):")
     print(confusion_matrix(y_true, y_pred))
 
-    df["if_anomaly"] = y_pred
+    df["kmeans_anomaly"] = y_pred
     return df
 
 
@@ -103,18 +108,18 @@ def run_statistical_detection(client: MongoClient) -> list[dict]:
 
 # ── Save to MongoDB ───────────────────────────────────────────────────────────
 
-def save_anomalies(client: MongoClient, if_df: pd.DataFrame, stat_spikes: list[dict]) -> None:
+def save_anomalies(client: MongoClient, km_df: pd.DataFrame, stat_spikes: list[dict]) -> None:
     col = client[MONGO_DB][COL_ANOMALIES]
     col.drop()  # fresh run each time
 
     detected_at = datetime.now(timezone.utc).isoformat()
     docs = []
 
-    # Isolation Forest anomalies — store block_id + scores
-    if_anomalies = if_df[if_df["if_anomaly"] == 1][["BlockId", "Label"]].copy()
-    for _, row in if_anomalies.iterrows():
+    # K-Means anomalies — store block_id + labels
+    km_anomalies = km_df[km_df["kmeans_anomaly"] == 1][["BlockId", "Label"]].copy()
+    for _, row in km_anomalies.iterrows():
         docs.append({
-            "method": "isolation_forest",
+            "method": "kmeans_distance",
             "block_id": row["BlockId"],
             "true_label": row["Label"],
             "detected_at": detected_at,
@@ -132,7 +137,7 @@ def save_anomalies(client: MongoClient, if_df: pd.DataFrame, stat_spikes: list[d
     if docs:
         col.insert_many(docs)
 
-    print(f"\nSaved {len(if_anomalies):,} IF anomalies + {len(stat_spikes)} stat spikes → MongoDB:{MONGO_DB}/{COL_ANOMALIES}")
+    print(f"\nSaved {len(km_anomalies):,} K-Means anomalies + {len(stat_spikes)} stat spikes → MongoDB:{MONGO_DB}/{COL_ANOMALIES}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -140,9 +145,9 @@ def save_anomalies(client: MongoClient, if_df: pd.DataFrame, stat_spikes: list[d
 def main() -> None:
     client = MongoClient(MONGO_URI)
 
-    if_df = run_isolation_forest()
+    km_df = run_kmeans_detection()
     stat_spikes = run_statistical_detection(client)
-    save_anomalies(client, if_df, stat_spikes)
+    save_anomalies(client, km_df, stat_spikes)
 
     client.close()
     print("\nDone. Next step: run the dashboard to visualize results.")

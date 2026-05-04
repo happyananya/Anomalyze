@@ -273,6 +273,35 @@ Steps 3 and 4 can run in parallel (open two terminals).
 
 ---
 
+## Model choice snapshot (K-Means vs Isolation Forest)
+
+To justify the primary ML detector, we compared models on the HDFS_2k-derived event matrix:
+
+```bash
+python -m detector.compare_spark_anomaly_models \
+  --csv data/HDFS_v1/preprocessed/Event_occurrence_matrix_2k.csv \
+  --empirical-contamination \
+  --no-spark
+```
+
+Observed comparison:
+
+| Model | Precision | Recall | F1 | TP | FP | FN | TN |
+|------|----------:|-------:|---:|---:|---:|---:|---:|
+| K-Means distance | 0.0882 | 0.0882 | 0.0882 | 6 | 62 | 62 | 1864 |
+| Isolation Forest | 0.0952 | 0.0294 | 0.0449 | 2 | 19 | 66 | 1907 |
+
+Why K-Means is used as the primary ML method in this repo:
+- It achieved significantly better **recall** and **F1** on our comparison run.
+- For anomaly detection in this project, missing true anomalies (false negatives) was a bigger concern than a small precision gain.
+- It remains simple and efficient for the E1-E29 event-count feature space.
+
+Notes:
+- Isolation Forest is still a valid baseline and can be kept for future re-evaluation.
+- Results depend on dataset slice and contamination settings; rerun the comparison when data distribution changes.
+
+---
+
 ## Troubleshooting
 
 **Kafka not ready yet**
