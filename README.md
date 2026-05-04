@@ -3,7 +3,7 @@
 Distributed log analytics and anomaly detection system for HDFS logs.
 Streams logs through Kafka, processes them with Spark, stores results in MongoDB,
 and detects anomalies using Isolation Forest (ML) and statistical thresholds.
-Results are visualized in an interactive Streamlit dashboard.
+Results are visualized in an interactive React dashboard backed by a FastAPI REST API.
 
 ## Architecture
 
@@ -21,19 +21,23 @@ Kafka Producer  ──►  [hdfs-logs topic]  ──►  Spark Consumer  ──�
                                                                MongoDB (anomalies)
                                                                          │
                                                                          ▼
-                                                               Streamlit Dashboard
+                                                               FastAPI (port 8000)
+                                                                         │
+                                                                         ▼
+                                                               React Dashboard (port 5173)
 ```
 
 ## Services
 
-| Service      | URL / Port                    | Description                        |
-|--------------|-------------------------------|------------------------------------|
-| Kafka UI     | http://localhost:8080         | Browse topics and messages         |
-| Spark UI     | http://localhost:8081         | Monitor Spark jobs                 |
-| MongoDB      | mongodb://localhost:27017     | Stores parsed logs and anomalies   |
-| Dashboard    | http://localhost:8501         | Interactive anomaly dashboard      |
-| Zookeeper    | localhost:2181                | Kafka coordination (internal)      |
-| Kafka broker | localhost:29092               | Kafka bootstrap address for Python |
+| Service          | URL / Port                    | Description                        |
+|------------------|-------------------------------|------------------------------------|
+| Kafka UI         | http://localhost:8080         | Browse topics and messages         |
+| Spark UI         | http://localhost:8081         | Monitor Spark jobs                 |
+| MongoDB          | mongodb://localhost:27017     | Stores parsed logs and anomalies   |
+| FastAPI          | http://localhost:8000         | REST API for the dashboard         |
+| React Dashboard  | http://localhost:5173         | Interactive anomaly dashboard      |
+| Zookeeper        | localhost:2181                | Kafka coordination (internal)      |
+| Kafka broker     | localhost:29092               | Kafka bootstrap address for Python |
 
 ---
 
@@ -44,6 +48,7 @@ Before you begin, make sure the following are installed:
 - **Docker Desktop** — runs Kafka, Spark, MongoDB, Zookeeper
 - **Python 3.12** — PySpark 3.5 does not support Python 3.13+
 - **Java 11+** — required by PySpark locally (`java -version` to check)
+- **Node.js 18+** — required to run the React frontend
 
 > If you only need the dashboard and detector (no Spark consumer), Python 3.13 with Anaconda works fine.
 
@@ -102,7 +107,7 @@ source .venv/bin/activate        # macOS / Linux
 pip install -r requirements.txt
 ```
 
-> If you are using Anaconda and don't have Python 3.12, you can still run the producer, detector, and dashboard with your existing Python. Just run `pip install -r requirements.txt` in your active Anaconda environment. The Spark consumer requires Python 3.12.
+> If you are using Anaconda and don't have Python 3.12, you can still run the producer, detector, and API server with your existing Python. The Spark consumer requires Python 3.12.
 
 ---
 
@@ -225,36 +230,50 @@ docker exec -it anomalyze-mongo mongosh anomalyze --eval "db.anomalies.countDocu
 
 ### Step 8 — Run the dashboard
 
-```bash
-streamlit run dashboard/app.py
-```
+The dashboard is a React app served by a Vite dev server, backed by a FastAPI REST API. Start both in separate terminals.
 
-Opens at http://localhost:8501.
-
-If you see `ModuleNotFoundError`, install dependencies first:
+**Terminal 1 — FastAPI backend:**
 
 ```bash
-pip install -r requirements.txt
-streamlit run dashboard/app.py
+uvicorn api.main:app --reload --port 8000
 ```
+
+**Terminal 2 — React frontend:**
+
+```bash
+cd frontend
+npm install      # first run only
+npm run dev
+```
+
+Opens at http://localhost:5173.
+
+> The Vite dev server proxies all `/api` requests to `localhost:8000`, so no CORS configuration is needed.
 
 **Dashboard features:**
 
 | Tab              | Contents                                                              |
 |------------------|-----------------------------------------------------------------------|
 | 📈 Log Activity  | Log level time-series, error rate % area chart                       |
-| 🚨 Anomalies     | Donut chart by method, spike scatter timeline, anomaly table         |
+| 🚨 Anomalies     | IF metrics (precision/recall/F1), confusion matrix, TP/FP donut, spike scatter timeline, anomaly table |
 | 🧩 Components    | Top-20 component bar chart, ERROR/WARN heatmap by hour               |
 | 🗃️ Raw Data      | Searchable, paginated log record table                               |
 
 **Sidebar controls:**
 - Date range picker
-- Log level filter (INFO / WARN / ERROR)
-- Component filter
+- Log level filter (INFO / WARN / ERROR / DEBUG)
+- Component filter (top 20)
 - Detection method filter
 - Block ID search
 - Time granularity: 1 min / 5 min / 15 min / 1 h
 - Auto-refresh toggle (every 30 seconds)
+
+**For production (optional):**
+
+```bash
+cd frontend && npm run build
+# Serve the dist/ folder with any static file server
+```
 
 ---
 
@@ -266,10 +285,11 @@ streamlit run dashboard/app.py
 3. python -m producer.producer --input ...       # stream logs → Kafka
 4. spark-submit --packages ... spark_consumer.py # Kafka → MongoDB
 5. python -m detector.anomaly_detector           # detect anomalies
-6. streamlit run dashboard/app.py                # view dashboard
+6. uvicorn api.main:app --reload --port 8000     # start REST API
+7. cd frontend && npm run dev                    # start React dashboard
 ```
 
-Steps 3 and 4 can run in parallel (open two terminals).
+Steps 3 and 4 can run in parallel (open two terminals). Steps 6 and 7 can also run in parallel.
 
 ---
 
@@ -302,6 +322,14 @@ Use `python3.12` to create the venv: `python3.12 -m venv .venv`.
 **Dashboard shows "No data"**
 Steps must be run in order — run the producer, consumer, and detector before opening the dashboard.
 
+**FastAPI import error**
+```
+ModuleNotFoundError: No module named 'fastapi'
+```
+```bash
+pip install fastapi
+```
+
 ---
 
 ## Project status
@@ -313,4 +341,5 @@ Steps must be run in order — run the producer, consumer, and detector before o
 - [x] MongoDB (Docker)
 - [x] Spark consumer — parses logs → MongoDB
 - [x] Anomaly detector — Isolation Forest + statistical threshold
-- [x] Dashboard — interactive Streamlit UI
+- [x] FastAPI REST API — serves dashboard data from MongoDB
+- [x] React dashboard — Vite + TypeScript + Tailwind + Recharts
