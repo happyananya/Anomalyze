@@ -1,4 +1,3 @@
-import { RefreshCw, Search } from "lucide-react";
 import type { FilterOptions, FiltersState } from "../types";
 
 interface SidebarProps {
@@ -7,175 +6,162 @@ interface SidebarProps {
   onChange: (patch: Partial<FiltersState>) => void;
 }
 
-function MultiSelect({
-  label,
-  all,
-  selected,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  all: string[];
-  selected: string[];
-  onChange: (v: string[]) => void;
-  placeholder?: string;
-}) {
-  const toggle = (item: string) => {
-    onChange(
-      selected.includes(item) ? selected.filter((x) => x !== item) : [...selected, item]
-    );
-  };
-  const allSelected = selected.length === all.length || selected.length === 0;
+const LEVEL_LIST = ["INFO", "WARN", "ERROR"] as const;
+const GRANULARITIES = ["1min", "5min", "15min", "1h"] as const;
 
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted uppercase tracking-wider">{label}</span>
-        <button
-          className="text-xs text-blue-accent hover:underline"
-          onClick={() => onChange(allSelected ? [] : [...all])}
-        >
-          {allSelected ? "none" : "all"}
-        </button>
-      </div>
-      <div className="max-h-36 overflow-y-auto space-y-0.5 pr-1">
-        {all.length === 0 && (
-          <span className="text-xs text-muted">{placeholder ?? "No options"}</span>
-        )}
-        {all.map((item) => (
-          <label key={item} className="flex items-center gap-2 cursor-pointer group">
-            <input
-              type="checkbox"
-              checked={selected.includes(item)}
-              onChange={() => toggle(item)}
-              className="accent-blue-500 rounded"
-            />
-            <span className="text-xs text-gray-300 group-hover:text-white truncate">{item}</span>
-          </label>
-        ))}
-      </div>
-    </div>
-  );
+function dot(level: string) {
+  const cls = `sidebar__level-dot sidebar__level-dot--${level}`;
+  return <span className={cls} />;
 }
 
 export default function Sidebar({ filters, options, onChange }: SidebarProps) {
   const minDate = options?.date_range.min?.slice(0, 10) ?? "";
   const maxDate = options?.date_range.max?.slice(0, 10) ?? "";
+  const allComponents = options?.components ?? [];
+  const allSelected =
+    filters.components.length === 0 || filters.components.length === allComponents.length;
+
+  function toggleLevel(lvl: string) {
+    const next = filters.levels.includes(lvl)
+      ? filters.levels.filter((x) => x !== lvl)
+      : [...filters.levels, lvl];
+    onChange({ levels: next });
+  }
+
+  function toggleMethod(m: string) {
+    const next = filters.methods.includes(m)
+      ? filters.methods.filter((x) => x !== m)
+      : [...filters.methods, m];
+    onChange({ methods: next });
+  }
+
+  function toggleComponent(c: string) {
+    const next = filters.components.includes(c)
+      ? filters.components.filter((x) => x !== c)
+      : [...filters.components, c];
+    onChange({ components: next });
+  }
+
+  function toggleAllComponents() {
+    onChange({ components: allSelected ? [] : [...allComponents] });
+  }
+
+  const levelActive = (lvl: string) =>
+    filters.levels.length === 0 || filters.levels.includes(lvl);
+
+  const methodActive = (m: string) =>
+    filters.methods.length === 0 || filters.methods.includes(m);
 
   return (
-    <aside className="w-64 shrink-0 bg-surface border-r border-overlay flex flex-col h-screen overflow-y-auto">
-      <div className="p-5 border-b border-overlay">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">🔍</span>
-          <div>
-            <h1 className="font-bold text-lg leading-tight">Anomalyze</h1>
-            <p className="text-xs text-muted">HDFS Log Anomaly Detection</p>
+    <aside className="sidebar">
+      {/* Date range */}
+      <div className="sidebar__section">
+        <div className="sidebar__label">Date range</div>
+        <input
+          type="date"
+          className="sidebar__date-input"
+          min={minDate}
+          max={maxDate}
+          value={filters.startDate}
+          onChange={(e) => onChange({ startDate: e.target.value })}
+        />
+        <div className="sidebar__date-arrow">→</div>
+        <input
+          type="date"
+          className="sidebar__date-input"
+          min={minDate}
+          max={maxDate}
+          value={filters.endDate}
+          onChange={(e) => onChange({ endDate: e.target.value })}
+        />
+      </div>
+
+      {/* Log levels */}
+      <div className="sidebar__section">
+        <div className="sidebar__label">Log levels</div>
+        {LEVEL_LIST.map((lvl) => (
+          <div
+            key={lvl}
+            className={`sidebar__level-item${levelActive(lvl) ? " sidebar__level-item--active" : ""}`}
+            onClick={() => toggleLevel(lvl)}
+          >
+            {dot(lvl)}
+            {lvl}
           </div>
+        ))}
+      </div>
+
+      {/* Detection method */}
+      {(options?.methods ?? []).length > 0 && (
+        <div className="sidebar__section">
+          <div className="sidebar__label">Detection method</div>
+          {(options?.methods ?? []).map((m) => (
+            <div
+              key={m}
+              className={`sidebar__level-item${methodActive(m) ? " sidebar__level-item--active" : ""}`}
+              onClick={() => toggleMethod(m)}
+            >
+              <span className="sidebar__level-dot sidebar__level-dot--method" />
+              {m.replace(/_/g, " ")}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Components */}
+      {allComponents.length > 0 && (
+        <div className="sidebar__section">
+          <div className="sidebar__label">Components</div>
+          <button className="sidebar__component-all" onClick={toggleAllComponents}>
+            {allSelected ? "Select none" : "Select all"}
+          </button>
+          <div className="sidebar__component-list">
+            {allComponents.map((c) => (
+              <label key={c} className="sidebar__component-item">
+                <input
+                  type="checkbox"
+                  className="sidebar__checkbox"
+                  checked={filters.components.includes(c) || allSelected}
+                  onChange={() => toggleComponent(c)}
+                />
+                <span>{c.length > 26 ? c.slice(-24) + "…" : c}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Time granularity */}
+      <div className="sidebar__section">
+        <div className="sidebar__label">Time granularity</div>
+        <div className="sidebar__pills">
+          {GRANULARITIES.map((g) => (
+            <button
+              key={g}
+              className={`sidebar__pill${filters.granularity === g ? " sidebar__pill--active" : ""}`}
+              onClick={() => onChange({ granularity: g })}
+            >
+              {g}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="p-4 space-y-5 flex-1">
-        {/* Auto-refresh */}
-        <label className="flex items-center justify-between cursor-pointer">
-          <span className="text-sm text-gray-300 flex items-center gap-2">
-            <RefreshCw size={14} />
-            Auto-refresh (30s)
-          </span>
-          <div
-            className={`w-10 h-5 rounded-full relative transition-colors ${
-              filters.autoRefresh ? "bg-blue-500" : "bg-overlay"
-            }`}
-            onClick={() => onChange({ autoRefresh: !filters.autoRefresh })}
-          >
-            <div
-              className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                filters.autoRefresh ? "translate-x-5" : "translate-x-0.5"
-              }`}
-            />
-          </div>
-        </label>
-
-        <hr className="border-overlay" />
-
-        {/* Date range */}
-        <div className="space-y-2">
-          <span className="text-xs font-medium text-muted uppercase tracking-wider">Date range</span>
+      {/* Block ID search */}
+      <div className="sidebar__section">
+        <div className="sidebar__label">Block ID search</div>
+        <div className="sidebar__search">
+          {/* inline SVG search icon — no external library */}
+          <svg className="sidebar__search-icon" viewBox="0 0 16 16" fill="none">
+            <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.3" />
+            <line x1="10" y1="10" x2="14" y2="14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
           <input
-            type="date"
-            className="input-dark w-full"
-            min={minDate}
-            max={maxDate}
-            value={filters.startDate}
-            onChange={(e) => onChange({ startDate: e.target.value })}
+            type="text"
+            placeholder="blk_-123456..."
+            value={filters.blockSearch}
+            onChange={(e) => onChange({ blockSearch: e.target.value })}
           />
-          <input
-            type="date"
-            className="input-dark w-full"
-            min={minDate}
-            max={maxDate}
-            value={filters.endDate}
-            onChange={(e) => onChange({ endDate: e.target.value })}
-          />
-        </div>
-
-        {/* Log levels */}
-        <MultiSelect
-          label="Log levels"
-          all={options?.levels ?? []}
-          selected={filters.levels}
-          onChange={(v) => onChange({ levels: v })}
-        />
-
-        {/* Components */}
-        <MultiSelect
-          label="Components (top 20)"
-          all={options?.components ?? []}
-          selected={filters.components}
-          onChange={(v) => onChange({ components: v })}
-          placeholder="All components"
-        />
-
-        <hr className="border-overlay" />
-
-        {/* Anomaly method */}
-        <MultiSelect
-          label="Detection method"
-          all={options?.methods ?? []}
-          selected={filters.methods}
-          onChange={(v) => onChange({ methods: v })}
-        />
-
-        {/* Block ID search */}
-        <div className="space-y-1">
-          <span className="text-xs font-medium text-muted uppercase tracking-wider">Block ID search</span>
-          <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-2.5 text-muted" />
-            <input
-              type="text"
-              className="input-dark w-full pl-8"
-              placeholder="blk_-123456…"
-              value={filters.blockSearch}
-              onChange={(e) => onChange({ blockSearch: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <hr className="border-overlay" />
-
-        {/* Granularity */}
-        <div className="space-y-1">
-          <span className="text-xs font-medium text-muted uppercase tracking-wider">Time granularity</span>
-          <select
-            className="select-dark w-full"
-            value={filters.granularity}
-            onChange={(e) =>
-              onChange({ granularity: e.target.value as FiltersState["granularity"] })
-            }
-          >
-            {(["1min", "5min", "15min", "1h"] as const).map((g) => (
-              <option key={g} value={g}>{g}</option>
-            ))}
-          </select>
         </div>
       </div>
     </aside>
