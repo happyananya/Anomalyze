@@ -2,7 +2,19 @@
 
 A distributed log analytics and anomaly detection system for HDFS logs. It streams logs through Kafka, processes them with Spark, detects anomalies using Isolation Forest and statistical thresholds, and presents results in an interactive React dashboard.
 
+![Anomalyze Banner](./assets/anomalyze_banner.jpeg)
+
 ---
+
+## Team members
+
+| Name            | NYU ID                       
+|-----------------|-------------------------------|
+| Ananya Agarwal  | aa13549                      |
+| Aman Kumar      | ak12378                       |
+| Gurleen Kaur    | gk2871                        |
+| Harindham Sharma| hs6169                        |
+| Aditya Kolluru  | kan9336                       |
 
 ## Table of Contents
 
@@ -95,7 +107,7 @@ Open http://localhost:5173 to view the dashboard.
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/Anomalyze.git
+git clone https://github.com/happyananya/Anomalyze.git
 cd Anomalyze
 ```
 
@@ -263,8 +275,6 @@ Open http://localhost:5173.
 | 🧩 Components   | Top-20 component bar chart, ERROR/WARN heatmap by hour                       |
 | 🗃️ Raw Data     | Searchable, paginated log table                                              |
 
-**Sidebar filters:** date range · log level · component · detection method · block ID · time granularity (1 min → 1 h) · auto-refresh (30 s)
-
 ---
 
 ## Model choice snapshot (K-Means vs Isolation Forest)
@@ -306,17 +316,3 @@ Notes:
 | `Python 3.13 is not supported by PySpark 3.5` | Wrong Python version | Create venv with `python3.12 -m venv .venv` |
 | Dashboard shows "No data" | Steps run out of order | Run producer → consumer → detector before opening the dashboard |
 | `ModuleNotFoundError: No module named 'fastapi'` | Missing dependency | Run `pip install -r requirements.txt` inside the venv |
-
----
-
-## Project Status
-
-- [x] Kafka + Zookeeper (Docker)
-- [x] Kafka UI
-- [x] Kafka producer — streams HDFS_v1 logs
-- [x] Spark master + worker (Docker)
-- [x] MongoDB (Docker)
-- [x] Spark consumer — parses logs → MongoDB
-- [x] Anomaly detector — Isolation Forest + statistical threshold
-- [x] FastAPI REST API — serves dashboard data from MongoDB
-- [x] React dashboard — Vite + TypeScript + Tailwind + Recharts
