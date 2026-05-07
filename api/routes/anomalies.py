@@ -27,7 +27,8 @@ def get_metrics(
     if anom_df.empty:
         return {"has_data": False}
 
-    if_df = anom_df[anom_df["method"] == "isolation_forest"]
+    labelled_df = anom_df[anom_df["true_label"].notna()] if "true_label" in anom_df.columns else pd.DataFrame()
+    if_df = labelled_df if not labelled_df.empty else anom_df[anom_df["method"] == "isolation_forest"]
     has_labels = "true_label" in if_df.columns and not if_df.empty
 
     if not has_labels:
@@ -78,7 +79,7 @@ def get_timeline(
     block_search: str | None = Query(None),
 ):
     anom_df = apply_anomaly_filters(get_anomalies_df(), methods, block_search)
-    if_df = anom_df[anom_df["method"] == "isolation_forest"] if not anom_df.empty else anom_df
+    if_df = anom_df if not anom_df.empty else anom_df
 
     if if_df.empty or "detected_at" not in if_df.columns:
         return []
@@ -89,7 +90,7 @@ def get_timeline(
     if df.empty:
         return []
 
-    df["result"] = df["true_label"].map({"Fail": "True Positive", "Success": "False Positive"}) if "true_label" in df.columns else "Unknown"
+    df["result"] = df["true_label"].map({"Fail": "True Positive", "Success": "False Positive"}).fillna("Unknown") if "true_label" in df.columns else "Unknown"
     df["bucket"] = df["detected_at_ts"].dt.floor("1h").dt.tz_localize(None)
 
     grp = df.groupby(["bucket", "result"]).size().reset_index(name="count")

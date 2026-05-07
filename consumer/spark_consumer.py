@@ -21,16 +21,18 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from pymongo import MongoClient
+from pymongo import MongoClient, UpdateOne
 from pyspark.sql import SparkSession
 
 from consumer.log_parse import parse_hdfs_raw_line
+from detector.streaming_detector import detect_batch
 
 KAFKA_BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP", "localhost:29092")
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "hdfs-logs")
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = "anomalyze"
 COLLECTION_LOGS = "parsed_logs"
+COLLECTION_ANOMALIES = "anomalies"
 CHECKPOINT_DIR = "/tmp/anomalyze-checkpoint"
 
 
@@ -62,9 +64,28 @@ def write_batch(batch_df, batch_id: int) -> None:
         return
 
     client = MongoClient(MONGO_URI)
-    client[MONGO_DB][COLLECTION_LOGS].insert_many(docs)
+    db = client[MONGO_DB]
+
+    # Write parsed logs
+    db[COLLECTION_LOGS].insert_many(docs)
+    print(f"[batch {batch_id}] inserted {len(docs)} docs → {COLLECTION_LOGS}")
+
+    # Detect anomalies in this batch and upsert (skip if block already recorded)
+    anomaly_docs = detect_batch(docs)
+    if anomaly_docs:
+        ops = [
+            UpdateOne(
+                {"method": d["method"], "block_id": d["block_id"]},
+                {"$setOnInsert": d},
+                upsert=True,
+            )
+            for d in anomaly_docs
+        ]
+        result = db[COLLECTION_ANOMALIES].bulk_write(ops, ordered=False)
+        if result.upserted_count:
+            print(f"[batch {batch_id}] +{result.upserted_count} new anomalies → {COLLECTION_ANOMALIES}")
+
     client.close()
-    print(f"[batch {batch_id}] inserted {len(docs)} docs into MongoDB:{MONGO_DB}/{COLLECTION_LOGS}")
 
 
 def main() -> None:
@@ -83,6 +104,7 @@ def main() -> None:
         .option("subscribe", KAFKA_TOPIC)
         .option("startingOffsets", "earliest")
         .option("maxOffsetsPerTrigger", 5000)
+        .option("failOnDataLoss", "false")
         .load()
         .selectExpr("CAST(value AS STRING) as value")
     )
