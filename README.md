@@ -362,19 +362,3 @@ LOG_INPUT=/path/to/HDFS_2k.log bash scripts/run_minimal_demo.sh
 | Dashboard shows "No data" | Steps run out of order | Run producer → consumer before opening the dashboard |
 | `ModuleNotFoundError: No module named 'fastapi'` | Missing dependency | Run `pip install -r requirements.txt` inside the venv |
 | Port 9092 conflict (Mac) | Homebrew Kafka running alongside Docker | `brew services stop kafka` |
-
----
-
-## Project Status
-
-- [x] Kafka + Zookeeper (Docker)
-- [x] Kafka UI
-- [x] Kafka producer — streams HDFS_v1 logs
-- [x] Spark master + worker (Docker)
-- [x] MongoDB (Docker, persistent volume)
-- [x] Spark consumer — parses logs → MongoDB
-- [x] Streaming anomaly detector — K-Means per micro-batch, built into consumer
-- [x] Batch anomaly detector — optional one-shot re-run
-- [x] FastAPI REST API — serves dashboard data from MongoDB
-- [x] React dashboard — Vite + TypeScript + Chart.js
-- [x] Convenience scripts — full-stack and minimal-demo launchers
