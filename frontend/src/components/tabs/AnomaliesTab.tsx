@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Bar } from "react-chartjs-2";
 import { format } from "date-fns";
 import { fetchAnomalyTimeline, fetchAnomalyRecords } from "../../lib/api";
-import type { FiltersState, AnomalyRecord } from "../../types";
+import type { AnomalyRecord } from "../../types";
 import FilterChips from "../FilterChips";
 
 function cssVar(name: string): string {
@@ -40,23 +40,23 @@ const CHIP_OPTIONS = [
 
 const PAGE_SIZE = 50;
 
-interface Props { filters: FiltersState; }
+interface Props { autoRefresh: boolean; }
 
-export default function AnomaliesTab({ filters }: Props) {
+export default function AnomaliesTab({ autoRefresh }: Props) {
   const [chip, setChip]               = useState("all");
   const [selectedWindow, setWindow]   = useState<string | null>(null);
   const [page, setPage]               = useState(0);
 
   const { data: timeline } = useQuery({
-    queryKey: ["anomaly-timeline", filters],
-    queryFn: () => fetchAnomalyTimeline(filters),
-    refetchInterval: filters.autoRefresh ? 30_000 : false,
+    queryKey: ["anomaly-timeline"],
+    queryFn: fetchAnomalyTimeline,
+    refetchInterval: autoRefresh ? 30_000 : false,
   });
 
   const { data: records, isLoading: rLoading } = useQuery({
-    queryKey: ["anomaly-records", filters, page],
-    queryFn: () => fetchAnomalyRecords(filters, PAGE_SIZE, page * PAGE_SIZE),
-    refetchInterval: filters.autoRefresh ? 30_000 : false,
+    queryKey: ["anomaly-records", page],
+    queryFn: () => fetchAnomalyRecords(PAGE_SIZE, page * PAGE_SIZE),
+    refetchInterval: autoRefresh ? 30_000 : false,
   });
 
   // Chart.js data
@@ -135,7 +135,7 @@ export default function AnomaliesTab({ filters }: Props) {
           ) : (
             <div className="empty-state">
               <div className="empty-state__icon">📉</div>
-              No timeline data for the selected filters.
+              No timeline data available.
             </div>
           )}
         </div>
@@ -188,7 +188,7 @@ export default function AnomaliesTab({ filters }: Props) {
                   <td colSpan={7}>
                     <div className="empty-state">
                       <div className="empty-state__icon">🔍</div>
-                      No records match the selected filters.
+                      No records match the current view.
                     </div>
                   </td>
                 </tr>

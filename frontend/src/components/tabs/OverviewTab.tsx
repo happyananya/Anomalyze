@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchAnomalyMetrics } from "../../lib/api";
-import type { FiltersState } from "../../types";
 import KPICard from "../KPICard";
 import PerformanceChart from "../PerformanceChart";
 import ConfusionMatrix from "../ConfusionMatrix";
@@ -18,13 +17,13 @@ function StatCell({ label, value, sub }: { label: string; value: number; sub?: s
   );
 }
 
-interface Props { filters: FiltersState; }
+interface Props { autoRefresh: boolean; }
 
-export default function OverviewTab({ filters }: Props) {
+export default function OverviewTab({ autoRefresh }: Props) {
   const { data: metrics, isLoading } = useQuery({
-    queryKey: ["anomaly-metrics", filters],
-    queryFn: () => fetchAnomalyMetrics(filters),
-    refetchInterval: filters.autoRefresh ? 30_000 : false,
+    queryKey: ["anomaly-metrics"],
+    queryFn: fetchAnomalyMetrics,
+    refetchInterval: autoRefresh ? 30_000 : false,
   });
 
   if (isLoading) {
@@ -67,7 +66,7 @@ export default function OverviewTab({ filters }: Props) {
 
   return (
     <div>
-      <StatusBanner metrics={metrics} autoRefresh={filters.autoRefresh} />
+      <StatusBanner metrics={metrics} autoRefresh={autoRefresh} />
 
       {/* KPI cards */}
       <div className="kpi-grid">

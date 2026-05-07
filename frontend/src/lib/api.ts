@@ -4,8 +4,6 @@ import type {
   AnomalyRecordsResponse,
   ComponentData,
   ErrorRatePoint,
-  FilterOptions,
-  FiltersState,
   HeatmapData,
   OverviewData,
   RawLogsResponse,
@@ -16,64 +14,38 @@ import type {
 
 const api = axios.create({ baseURL: "/api" });
 
-function logsParams(f: FiltersState) {
-  return {
-    start_date: f.startDate || undefined,
-    end_date: f.endDate || undefined,
-    levels: f.levels.length ? f.levels.join(",") : undefined,
-    components: f.components.length ? f.components.join(",") : undefined,
-    granularity: f.granularity,
-  };
-}
-
-function anomalyParams(f: FiltersState) {
-  return {
-    methods: f.methods.length ? f.methods.join(",") : undefined,
-    block_search: f.blockSearch || undefined,
-  };
-}
-
-export async function fetchFilters(): Promise<FilterOptions> {
-  const { data } = await api.get("/filters");
+export async function fetchOverview(): Promise<OverviewData> {
+  const { data } = await api.get("/overview");
   return data;
 }
 
-export async function fetchOverview(f: FiltersState): Promise<OverviewData> {
-  const { data } = await api.get("/overview", {
-    params: { ...logsParams(f), ...anomalyParams(f) },
-  });
+export async function fetchTimeseries(): Promise<TimeseriesPoint[]> {
+  const { data } = await api.get("/logs/timeseries");
   return data;
 }
 
-export async function fetchTimeseries(f: FiltersState): Promise<TimeseriesPoint[]> {
-  const { data } = await api.get("/logs/timeseries", { params: logsParams(f) });
+export async function fetchErrorRate(): Promise<ErrorRatePoint[]> {
+  const { data } = await api.get("/logs/error-rate");
   return data;
 }
 
-export async function fetchErrorRate(f: FiltersState): Promise<ErrorRatePoint[]> {
-  const { data } = await api.get("/logs/error-rate", { params: logsParams(f) });
+export async function fetchComponents(): Promise<ComponentData[]> {
+  const { data } = await api.get("/logs/components");
   return data;
 }
 
-export async function fetchComponents(f: FiltersState): Promise<ComponentData[]> {
-  const { data } = await api.get("/logs/components", { params: logsParams(f) });
-  return data;
-}
-
-export async function fetchHeatmap(f: FiltersState): Promise<HeatmapData> {
-  const { data } = await api.get("/logs/heatmap", { params: logsParams(f) });
+export async function fetchHeatmap(): Promise<HeatmapData> {
+  const { data } = await api.get("/logs/heatmap");
   return data;
 }
 
 export async function fetchRawLogs(
-  f: FiltersState,
   textFilter: string,
   limit: number,
   offset: number
 ): Promise<RawLogsResponse> {
   const { data } = await api.get("/logs/raw", {
     params: {
-      ...logsParams(f),
       text_filter: textFilter || undefined,
       limit,
       offset,
@@ -82,13 +54,13 @@ export async function fetchRawLogs(
   return data;
 }
 
-export async function fetchAnomalyMetrics(f: FiltersState): Promise<AnomalyMetrics> {
-  const { data } = await api.get("/anomalies/metrics", { params: anomalyParams(f) });
+export async function fetchAnomalyMetrics(): Promise<AnomalyMetrics> {
+  const { data } = await api.get("/anomalies/metrics");
   return data;
 }
 
-export async function fetchAnomalyTimeline(f: FiltersState): Promise<TimelinePoint[]> {
-  const { data } = await api.get("/anomalies/timeline", { params: anomalyParams(f) });
+export async function fetchAnomalyTimeline(): Promise<TimelinePoint[]> {
+  const { data } = await api.get("/anomalies/timeline");
   return data;
 }
 
@@ -98,12 +70,11 @@ export async function fetchSpikes(): Promise<SpikePoint[]> {
 }
 
 export async function fetchAnomalyRecords(
-  f: FiltersState,
   limit: number,
   offset: number
 ): Promise<AnomalyRecordsResponse> {
   const { data } = await api.get("/anomalies/records", {
-    params: { ...anomalyParams(f), limit, offset },
+    params: { limit, offset },
   });
   return data;
 }

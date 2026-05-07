@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useState } from "react";
 import { fetchRawLogs } from "../../lib/api";
-import type { FiltersState, RawLogItem } from "../../types";
+import type { RawLogItem } from "../../types";
 
 type SortKey = keyof Pick<RawLogItem, "ts" | "level" | "component" | "block_id">;
 type SortDir = "asc" | "desc";
@@ -32,18 +32,18 @@ function exportCSV(items: RawLogItem[]) {
   URL.revokeObjectURL(url);
 }
 
-interface Props { filters: FiltersState; }
+interface Props { autoRefresh: boolean; }
 
-export default function RawDataTab({ filters }: Props) {
+export default function RawDataTab({ autoRefresh }: Props) {
   const [textFilter, setTextFilter] = useState("");
   const [limit,  setLimit]  = useState(500);
   const [sortKey, setSortKey] = useState<SortKey>("ts");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["raw-logs", filters, textFilter, limit, 0],
-    queryFn: () => fetchRawLogs(filters, textFilter, limit, 0),
-    refetchInterval: filters.autoRefresh ? 30_000 : false,
+    queryKey: ["raw-logs", textFilter, limit, 0],
+    queryFn: () => fetchRawLogs(textFilter, limit, 0),
+    refetchInterval: autoRefresh ? 30_000 : false,
   });
 
   function toggleSort(key: SortKey) {

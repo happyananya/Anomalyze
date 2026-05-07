@@ -1,5 +1,4 @@
 import type { TabId } from "../App";
-import type { FiltersState } from "../types";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "overview",   label: "Overview" },
@@ -11,17 +10,15 @@ const TABS: { id: TabId; label: string }[] = [
 interface NavBarProps {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
-  filters: FiltersState;
-  onFilterChange: (patch: Partial<FiltersState>) => void;
-  dateLabel: string;
+  autoRefresh: boolean;
+  onAutoRefreshChange: (next: boolean) => void;
 }
 
 export default function NavBar({
   activeTab,
   onTabChange,
-  filters,
-  onFilterChange,
-  dateLabel,
+  autoRefresh,
+  onAutoRefreshChange,
 }: NavBarProps) {
   return (
     <nav className="nav">
@@ -57,15 +54,13 @@ export default function NavBar({
           Live
         </div>
 
-        {dateLabel && <span className="nav__date">{dateLabel}</span>}
-
         <label className="toggle">
           <span className="toggle__label">Auto-refresh 30s</span>
           <div
-            className={`toggle__track${filters.autoRefresh ? " toggle__track--active" : ""}`}
-            onClick={() => onFilterChange({ autoRefresh: !filters.autoRefresh })}
+            className={`toggle__track${autoRefresh ? " toggle__track--active" : ""}`}
+            onClick={() => onAutoRefreshChange(!autoRefresh)}
           >
-            <div className={`toggle__thumb${filters.autoRefresh ? " toggle__thumb--active" : ""}`} />
+            <div className={`toggle__thumb${autoRefresh ? " toggle__thumb--active" : ""}`} />
           </div>
         </label>
       </div>

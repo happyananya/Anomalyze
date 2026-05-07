@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { fetchComponents } from "../../lib/api";
-import type { FiltersState, ComponentData } from "../../types";
+import type { ComponentData } from "../../types";
 
 function ComponentCard({ comp, maxTotal }: { comp: ComponentData; maxTotal: number }) {
   const [mounted, setMounted] = useState(false);
@@ -33,13 +33,13 @@ function ComponentCard({ comp, maxTotal }: { comp: ComponentData; maxTotal: numb
   );
 }
 
-interface Props { filters: FiltersState; }
+interface Props { autoRefresh: boolean; }
 
-export default function ComponentsTab({ filters }: Props) {
+export default function ComponentsTab({ autoRefresh }: Props) {
   const { data: comps, isLoading } = useQuery({
-    queryKey: ["components", filters],
-    queryFn: () => fetchComponents(filters),
-    refetchInterval: filters.autoRefresh ? 30_000 : false,
+    queryKey: ["components"],
+    queryFn: fetchComponents,
+    refetchInterval: autoRefresh ? 30_000 : false,
   });
 
   if (isLoading) {
@@ -63,7 +63,7 @@ export default function ComponentsTab({ filters }: Props) {
     return (
       <div className="empty-state">
         <div className="empty-state__icon">🧩</div>
-        No component data for the selected filters.
+        No component data available.
       </div>
     );
   }

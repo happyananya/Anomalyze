@@ -1,21 +1,3 @@
-export interface FilterOptions {
-  date_range: { min: string | null; max: string | null };
-  levels: string[];
-  components: string[];
-  methods: string[];
-}
-
-export interface FiltersState {
-  startDate: string;
-  endDate: string;
-  levels: string[];
-  components: string[];
-  methods: string[];
-  blockSearch: string;
-  granularity: "1min" | "5min" | "15min" | "1h";
-  autoRefresh: boolean;
-}
-
 export interface OverviewData {
   total_logs: number;
   error_logs: number;
