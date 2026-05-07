@@ -6,15 +6,31 @@ A distributed log analytics and anomaly detection system for HDFS logs. It strea
 
 ---
 
-## Team members
+## Team
 
-| Name            | NYU ID                       
-|-----------------|-------------------------------|
-| Ananya Agarwal  | aa13549                      |
-| Aman Kumar      | ak12378                       |
-| Gurleen Kaur    | gk2871                        |
-| Harindham Sharma| hs6169                        |
-| Aditya Kolluru  | kan9336                       |
+| Name             | NYU ID  |
+|------------------|---------|
+| Ananya Agarwal   | aa13549 |
+| Aman Kumar       | ak12378 |
+| Gurleen Kaur     | gk2871  |
+| Harindham Sharma | hs6169  |
+| Aditya Kolluru   | kan9336 |
+
+---
+
+## Tech Stack
+
+| Layer          | Technology                                      |
+|----------------|-------------------------------------------------|
+| Ingestion      | Apache Kafka 7.6 (Confluent), Zookeeper         |
+| Processing     | Apache Spark 3.5 (PySpark), Structured Streaming|
+| Detection      | scikit-learn K-Means, NumPy, pandas             |
+| Storage        | MongoDB 7.0                                     |
+| API            | FastAPI + Uvicorn                               |
+| Frontend       | React 18, TypeScript, Vite, Chart.js            |
+| Infrastructure | Docker Compose                                  |
+
+---
 
 ## Table of Contents
 
@@ -24,8 +40,9 @@ A distributed log analytics and anomaly detection system for HDFS logs. It strea
 4. [Setup Guide](#setup-guide)
 5. [Dashboard](#dashboard)
 6. [Model Details](#model-details)
-7. [Troubleshooting](#troubleshooting)
-8. [Project Status](#project-status)
+7. [Scripts](#scripts)
+8. [Troubleshooting](#troubleshooting)
+9. [Project Status](#project-status)
 
 ---
 
@@ -284,6 +301,7 @@ spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 consume
 | Raw Data   | Searchable, paginated table of all parsed log lines                  |
 
 Enable **Auto-refresh 30s** (top-right toggle) to watch numbers update live as the producer streams data.
+
 ---
 
 ## Model Details
@@ -310,6 +328,25 @@ python -m detector.anomaly_detector
 
 ---
 
+## Scripts
+
+Two convenience shell scripts are provided in `scripts/` to reduce manual terminal juggling:
+
+| Script                | Description                                                                 |
+|-----------------------|-----------------------------------------------------------------------------|
+| `run_full_stack.sh`   | Starts Docker, generates event matrix, launches producer + Spark consumer   |
+| `run_minimal_demo.sh` | MongoDB-only mode — ingest logs and run detection without Kafka or Spark    |
+
+```bash
+# Full pipeline (requires Docker + Java + python3.12 venv)
+LOG_INPUT=/path/to/HDFS.log bash scripts/run_full_stack.sh
+
+# Minimal demo (no Kafka / Spark required)
+LOG_INPUT=/path/to/HDFS_2k.log bash scripts/run_minimal_demo.sh
+```
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -322,7 +359,7 @@ python -m detector.anomaly_detector
 | `JAVA_HOME is not set` | Java missing | Install Java 11+ and ensure it's on your PATH |
 | `ServerSelectionTimeoutError` | MongoDB not running | Run `docker compose up -d` and check `docker compose ps` |
 | `Python 3.13 is not supported by PySpark 3.5` | Wrong Python version | Create venv with `python3.12 -m venv .venv` |
-| Dashboard shows "No data" | Steps run out of order | Run producer → consumer → detector before opening the dashboard |
+| Dashboard shows "No data" | Steps run out of order | Run producer → consumer before opening the dashboard |
 | `ModuleNotFoundError: No module named 'fastapi'` | Missing dependency | Run `pip install -r requirements.txt` inside the venv |
 | Port 9092 conflict (Mac) | Homebrew Kafka running alongside Docker | `brew services stop kafka` |
 
@@ -340,3 +377,4 @@ python -m detector.anomaly_detector
 - [x] Batch anomaly detector — optional one-shot re-run
 - [x] FastAPI REST API — serves dashboard data from MongoDB
 - [x] React dashboard — Vite + TypeScript + Chart.js
+- [x] Convenience scripts — full-stack and minimal-demo launchers
